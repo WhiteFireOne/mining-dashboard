@@ -130,6 +130,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif parsed.path == '/config':
             self._serve_config()
         else:
+            # Block direct file access to config.json (contains credentials)
+            resolved = self.translate_path(self.path)
+            if os.path.normcase(resolved) == os.path.normcase(CONFIG_FILE):
+                self._error(403, 'Forbidden')
+                return
             super().do_GET()
 
     def do_PATCH(self):
@@ -282,5 +287,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     print(f'Mining Dashboard  →  http://localhost:{PORT}/mining-dashboard.html')
     print('Press Ctrl+C to stop.\n')
-    with http.server.HTTPServer(('', PORT), Handler) as httpd:
+    # Bind to localhost only — change '127.0.0.1' to '' to allow LAN access
+    with http.server.HTTPServer(('127.0.0.1', PORT), Handler) as httpd:
         httpd.serve_forever()
