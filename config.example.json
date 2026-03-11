@@ -1,0 +1,12 @@
+{
+  "miners": [
+    { "ip": "192.168.1.100", "name": "Bitaxe Gamma #1", "type": "bitaxe" },
+    { "ip": "192.168.1.101", "name": "Bitaxe Gamma #2", "type": "bitaxe" },
+    { "ip": "192.168.1.102", "name": "Avalon Nano 3S",  "type": "avalon" }
+  ],
+  "node": {
+    "url":      "http://192.168.1.10:8332/",
+    "user":     "bitcoin",
+    "password": "your-rpc-password-here"
+  }
+}

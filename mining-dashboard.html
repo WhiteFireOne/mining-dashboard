@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mining Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --green:   #3fb950;
+      --yellow:  #d29922;
+      --red:     #f85149;
+      --blue:    #58a6ff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    header h1 { font-size: 1.35rem; font-weight: 600; color: var(--blue); }
+    header .sub { color: var(--muted); font-size: 0.82rem; margin-top: 0.2rem; }
+
+    .header-right { display: flex; align-items: center; gap: 0.9rem; }
+    .last-updated { color: var(--muted); font-size: 0.8rem; }
+
+    button.refresh {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.35rem 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.83rem;
+      transition: background 0.15s;
+    }
+    button.refresh:hover { background: var(--border); }
+
+    /* ── Summary bar ─────────────────────────────────────── */
+    .summary-bar {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.7rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .summary-item .s-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .summary-item .s-value {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-top: 0.15rem;
+    }
+
+    /* ── Grid ────────────────────────────────────────────── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 1rem;
+    }
+
+    /* ── Cards ───────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.15rem;
+    }
+    .card.online  { border-top: 3px solid var(--green); }
+    .card.offline { border-top: 3px solid var(--red); }
+    .card.loading { border-top: 3px solid var(--border); }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.9rem;
+    }
+    .card-header .name { font-weight: 600; font-size: 0.92rem; }
+    .card-header .ip   { color: var(--muted); font-size: 0.76rem; font-family: monospace; margin-top: 0.15rem; }
+
+    .badge {
+      font-size: 0.7rem;
+      padding: 0.18rem 0.48rem;
+      border-radius: 999px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .badge.online  { background: rgba(63,185,80,.15);  color: var(--green); }
+    .badge.offline { background: rgba(248,81,73,.15);  color: var(--red); }
+    .badge.loading { background: rgba(139,148,158,.15); color: var(--muted); }
+
+    /* ── Metric grid ─────────────────────────────────────── */
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+      margin-bottom: 0.9rem;
+    }
+    .metric {
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 0.55rem 0.7rem;
+    }
+    .metric .m-label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.18rem;
+    }
+    .metric .m-val { font-size: 0.92rem; font-weight: 600; line-height: 1.3; }
+    .metric .m-val.hot  { color: var(--red); }
+    .metric .m-val.warm { color: var(--yellow); }
+    .metric .m-val.cool { color: var(--green); }
+    .metric .m-sub { font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem; }
+
+    /* ── Card footer ─────────────────────────────────────── */
+    .card-footer {
+      border-top: 1px solid var(--border);
+      padding-top: 0.7rem;
+      font-size: 0.76rem;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .card-footer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-footer strong { color: var(--text); }
+
+    .err-msg { color: var(--red); font-size: 0.82rem; padding: 0.6rem 0; text-align: center; }
+
+    /* ── CORS notice ─────────────────────────────────────── */
+    #corsNotice {
+      display: none;
+      background: rgba(248,81,73,.1);
+      border: 1px solid rgba(248,81,73,.4);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.82rem;
+      color: var(--red);
+    }
+    #corsNotice a { color: var(--blue); }
+
+    .spin { display: inline-block; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Node panel ──────────────────────────────────────────── */
+    .node-panel {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid #f7931a;
+      border-radius: 8px;
+      padding: 0.7rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .node-panel .n-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #f7931a;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .node-panel .summary-item .s-value { font-size: 0.95rem; }
+    .node-panel .s-label { font-size: 0.65rem; }
+    .node-divider { width: 1px; background: var(--border); align-self: stretch; margin: 0 0.25rem; }
+
+    /* ── Mempool panel ────────────────────────────────────────── */
+    .mempool-panel {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid #a371f7;
+      border-radius: 8px;
+      padding: 0.7rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .mempool-panel .n-title { color: #a371f7; }
+    .mempool-panel .summary-item .s-value { font-size: 0.95rem; }
+    .mempool-panel .s-label { font-size: 0.65rem; }
+    .diff-down { color: var(--green); }
+    .diff-up   { color: var(--red); }
+
+    /* ── Controls (Bitaxe only) ──────────────────────────────── */
+    .controls {
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+      margin-top: 0.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .ctrl-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      min-width: 4.5rem;
+    }
+
+    /* Fan +/- */
+    .fan-ctrl { display: flex; align-items: center; gap: 0.4rem; }
+    .fan-ctrl span { font-size: 0.82rem; font-weight: 600; min-width: 7rem; text-align: center; }
+    .btn-step {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 1.8rem; height: 1.8rem;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .btn-step:hover { background: var(--border); }
+    .btn-step:disabled { opacity: 0.35; cursor: default; }
+
+    /* OC Tune */
+    .oc-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; }
+    .oc-presets { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; }
+    .oc-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.22rem 0.5rem;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.72rem;
+      font-weight: 500;
+    }
+    .oc-btn:hover { border-color: var(--blue); color: var(--text); }
+    .oc-btn.active { border-color: var(--green); color: var(--green); background: rgba(63,185,80,.1); }
+    .oc-vals { font-size: 0.72rem; color: var(--muted); }
+    .oc-vals span + span::before { content: ' · '; }
+
+    /* Reboot */
+    .reboot-btn {
+      width: 100%;
+      background: rgba(248,81,73,.08);
+      border: 1px solid rgba(248,81,73,.3);
+      color: var(--red);
+      padding: 0.4rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-top: 0.1rem;
+    }
+    .reboot-btn:hover { background: rgba(248,81,73,.18); }
+
+    @media (max-width: 580px) {
+      .grid { grid-template-columns: 1fr; }
+      .summary-bar { gap: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>⛏ Mining Dashboard</h1>
+    <div class="sub" id="subtitle">Loading...</div>
+  </div>
+  <div class="header-right">
+    <span class="last-updated" id="lastUpdated">—</span>
+    <button class="refresh" onclick="doRefresh()">↻ Refresh</button>
+  </div>
+</header>
+
+<div id="corsNotice">
+  ⚠ Not running via the proxy server. Open a terminal in the mining-dashboard directory and run:
+  <code>python3 server.py</code>
+  then open <a href="http://localhost:8080/mining-dashboard.html">http://localhost:8080/mining-dashboard.html</a>
+</div>
+
+<div class="node-panel" id="nodePanel" style="display:none">
+  <span class="n-title">₿ Node</span>
+  <div class="summary-item"><div class="s-label">Block</div><div class="s-value" id="nodeBlock">—</div></div>
+  <div class="summary-item"><div class="s-label">Network</div><div class="s-value" id="nodeNetwork">—</div></div>
+  <div class="summary-item"><div class="s-label">Difficulty</div><div class="s-value" id="nodeDiff">—</div></div>
+  <div class="summary-item"><div class="s-label">Est. Block</div><div class="s-value" id="nodeEst">—</div></div>
+  <div class="node-divider"></div>
+  <div class="summary-item"><div class="s-label">Odds / Block</div><div class="s-value" id="nodeSolo">—</div></div>
+  <div class="summary-item"><div class="s-label">24 Hours</div><div class="s-value" id="nodeP1d">—</div></div>
+  <div class="summary-item"><div class="s-label">1 Week</div><div class="s-value" id="nodeP1w">—</div></div>
+  <div class="summary-item"><div class="s-label">1 Month</div><div class="s-value" id="nodeP1m">—</div></div>
+  <div class="summary-item"><div class="s-label">1 Year</div><div class="s-value" id="nodeP1y">—</div></div>
+</div>
+
+<div class="mempool-panel" id="mempoolPanel" style="display:none">
+  <span class="n-title">⛓ Network</span>
+  <div class="summary-item"><div class="s-label">Block Value</div><div class="s-value" id="mpBlockVal">—</div></div>
+  <div class="summary-item"><div class="s-label">Mempool</div><div class="s-value" id="mpCount">—</div></div>
+  <div class="summary-item"><div class="s-label">Fees in Pool</div><div class="s-value" id="mpFees">—</div></div>
+  <div class="node-divider"></div>
+  <div class="summary-item"><div class="s-label">Retarget</div><div class="s-value" id="mpRetarget">—</div></div>
+  <div class="summary-item"><div class="s-label">Est. Change</div><div class="s-value" id="mpDiffChange">—</div></div>
+  <div class="summary-item"><div class="s-label">Remaining</div><div class="s-value" id="mpRemaining">—</div></div>
+  <div class="node-divider"></div>
+  <div class="summary-item"><div class="s-label">Fast</div><div class="s-value" id="mpFast">—</div></div>
+  <div class="summary-item"><div class="s-label">Medium</div><div class="s-value" id="mpMed">—</div></div>
+  <div class="summary-item"><div class="s-label">Slow</div><div class="s-value" id="mpSlow">—</div></div>
+</div>
+
+<div class="summary-bar">
+  <div class="summary-item"><div class="s-label">Miners Online</div><div class="s-value" id="sumOnline">—</div></div>
+  <div class="summary-item"><div class="s-label">Total Hashrate</div><div class="s-value" id="sumHashrate">—</div></div>
+  <div class="summary-item"><div class="s-label">Total Power</div><div class="s-value" id="sumPower">—</div></div>
+  <div class="summary-item"><div class="s-label">Avg Temp</div><div class="s-value" id="sumTemp">—</div></div>
+  <div class="summary-item"><div class="s-label">Acc / Rej Shares</div><div class="s-value" id="sumShares">—</div></div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const OC_PRESETS = [
+  { name: 'stock',    label: 'Stock',    frequency: 525, coreVoltage: 1150 },
+  { name: 'mild_oc',  label: 'Mild OC',  frequency: 550, coreVoltage: 1166 },
+  { name: 'med_oc',   label: 'Med OC',   frequency: 575, coreVoltage: 1200 },
+  { name: 'heavy_oc', label: 'Heavy OC', frequency: 600, coreVoltage: 1250 },
+];
+
+let MINERS = [];
+const REFRESH_MS = 30_000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const state = {}; // ip -> { status, data }
+let timer = null;
+let corsErrorSeen = false;
+let hasNode = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FETCH HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+async function fetchTimeout(url, ms = 7000) {
+  const ac = new AbortController();
+  const id = setTimeout(() => ac.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ac.signal });
+    clearTimeout(id);
+    return r;
+  } catch (e) {
+    clearTimeout(id);
+    throw e;
+  }
+}
+
+// Route all miner requests through the local proxy (server.py) to avoid CORS.
+// The proxy fetches from the miner server-side and returns the JSON to us.
+function proxyUrl(ip, path) {
+  return `/proxy?url=${encodeURIComponent(`http://${ip}${path}`)}`;
+}
+
+async function fetchBitaxe(ip) {
+  const r = await fetchTimeout(proxyUrl(ip, '/api/system/info'));
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// Avalon Nano 3S uses CGMiner TCP API (port 4028) — browser can't reach TCP
+// directly, so server.py handles it and exposes a /avalon HTTP endpoint.
+async function fetchAvalon(ip) {
+  const r = await fetchTimeout(`/avalon?ip=${ip}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function loadConfig() {
+  try {
+    const r = await fetchTimeout('/config');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const cfg = await r.json();
+    MINERS  = cfg.miners;
+    hasNode = cfg.hasNode;
+    return true;
+  } catch (e) {
+    corsErrorSeen = true;
+    document.getElementById('corsNotice').style.display = 'block';
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARSERS
+// ─────────────────────────────────────────────────────────────────────────────
+function parseBitaxe(raw) {
+  const eff = (raw.hashRate && raw.power)
+    ? `${(raw.power / (raw.hashRate / 1000)).toFixed(1)} J/TH`
+    : null;
+  return {
+    model:          raw.ASICModel ? `BM${raw.ASICModel.replace('BM','')}` : 'Gamma 601',
+    hostname:       raw.hostname || null,
+    hashrate:       raw.hashRate   ?? null,   // GH/s
+    temp:           raw.temp       ?? null,
+    vrTemp:         raw.vrTemp     ?? null,
+    fanRpm:         raw.fanrpm     ?? null,
+    fanPercent:     raw.fanPercent ?? raw.fanspeed ?? null,
+    power:          raw.power      ?? null,   // W
+    voltage:        raw.voltage    ? raw.voltage / 1000 : null, // mV -> V
+    current:        raw.current    ? raw.current / 1000 : null, // mA -> A
+    coreVoltage:    raw.coreVoltage ?? null,  // mV (ASIC core)
+    efficiency:     eff,
+    sharesAccepted: raw.sharesAccepted ?? null,
+    sharesRejected: raw.sharesRejected ?? null,
+    bestDiff:       raw.bestDiff   || null,
+    pool:           raw.stratumURL || null,
+    worker:         raw.stratumUser|| null,
+    uptime:         raw.uptimeSeconds ?? null,
+    version:        raw.version    || null,
+    frequency:      raw.frequency  ?? null,
+  };
+}
+
+// Parse an Avalon MM string like "Key[val] Key2[val2] ..." into an object.
+function parseMMString(str) {
+  const result = {};
+  for (const [, k, v] of str.matchAll(/(\w+)\[([^\]]*)\]/g)) result[k] = v;
+  return result;
+}
+
+function parseAvalon(raw) {
+  const s  = raw.summary?.SUMMARY?.[0]  ?? {};
+  const p  = raw.pools?.POOLS?.[0]      ?? {};
+
+  // litestats returns an MM string in STATS[0]['MM ID0']
+  // e.g. "GHSspd[6392.4] OTemp[61] ITemp[-273] FanR[38%] MODE[2] ..."
+  const mmStr = raw.litestats?.STATS?.[0]?.['MM ID0'] ?? '';
+  const mm    = parseMMString(mmStr);
+
+  // Hashrate: prefer GHSspd from litestats, fall back to MHS av from summary
+  let hr = mm.GHSspd ? parseFloat(mm.GHSspd)
+         : s['MHS av'] != null ? s['MHS av'] / 1000
+         : null;
+
+  // Exhaust temp: OTemp from litestats
+  const oTemp = mm.OTemp != null ? parseFloat(mm.OTemp) : null;
+  const exhaustTemp = oTemp != null && oTemp > -100 ? oTemp : null;
+
+  // estats MM string — richer data
+  const emStr = raw.estats?.STATS?.[0]?.['MM ID0'] ?? '';
+  const em = parseMMString(emStr);
+
+  const chipTemp  = em.TMax  != null ? parseFloat(em.TMax)  : null;
+  const power     = em.MPO   != null ? parseFloat(em.MPO)   : null;  // watts
+  const fanRpm    = em.Fan1  != null ? parseFloat(em.Fan1)  : null;  // RPM
+
+  // Fan %: prefer litestats FanR, estats also has it
+  const fanPercent = mm.FanR ? parseInt(mm.FanR) : (em.FanR ? parseInt(em.FanR) : null);
+
+  // Work mode from estats WORKMODE field (0=Low, 1=Med, 2=High)
+  const workMode = em.WORKMODE != null ? parseInt(em.WORKMODE)
+                 : mm.MODE     != null ? parseInt(mm.MODE) : null;
+
+  // Efficiency
+  const eff = (power && hr) ? `${(power / hr).toFixed(1)} W/TH` : null;
+
+  // Pool URL — strip "stratum+tcp://" prefix for display
+  const poolUrl = (p.URL ?? '').replace(/^stratum\+tcp:\/\//, '') || null;
+
+  return {
+    model:          'Avalon Nano 3S',
+    hostname:       null,
+    hashrate:       hr,
+    temp:           exhaustTemp,   // exhaust / outlet temp
+    chipTemp,                      // ASIC chip temp (TMax from estats)
+    vrTemp:         null,
+    fanRpm,
+    fanPercent,
+    power,
+    voltage:        null,
+    efficiency:     eff,
+    sharesAccepted: s.Accepted  ?? null,
+    sharesRejected: s.Rejected  ?? null,
+    bestDiff:       null,
+    pool:           poolUrl,
+    worker:         p.User      ?? null,
+    uptime:         s.Elapsed   ?? null,
+    version:        null,
+    frequency:      null,
+    current:        null,
+    coreVoltage:    null,
+    workMode,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FORMATTING
+// ─────────────────────────────────────────────────────────────────────────────
+function fmtHashrate(gh) {
+  if (gh === null) return 'N/A';
+  if (gh >= 1000)  return `${(gh / 1000).toFixed(3)} TH/s`;
+  return `${gh.toFixed(2)} GH/s`;
+}
+
+function fmtUptime(s) {
+  if (s === null) return 'N/A';
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return [d && `${d}d`, h && `${h}h`, `${m}m`].filter(Boolean).join(' ');
+}
+
+function tempClass(t) {
+  if (t === null) return '';
+  return t >= 75 ? 'hot' : t >= 62 ? 'warm' : 'cool';
+}
+
+function fmtShares(acc, rej) {
+  if (acc === null) return 'N/A';
+  const rejPct = acc + rej > 0 ? ((rej / (acc + rej)) * 100).toFixed(1) : '0.0';
+  return `${acc.toLocaleString()} / ${rej}${rej > 0 ? ` (${rejPct}%)` : ''}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDERING
+// ─────────────────────────────────────────────────────────────────────────────
+function cardHTML(miner, status, d, err) {
+  if (status === 'loading') return `
+    <div class="card-header">
+      <div><div class="name">${miner.name}</div><div class="ip">${miner.ip}</div></div>
+      <span class="badge loading"><span class="spin">↻</span> Loading</span>
+    </div>
+    <div class="err-msg" style="color:var(--muted)">Fetching…</div>`;
+
+  if (status === 'offline') return `
+    <div class="card-header">
+      <div><div class="name">${miner.name}</div><div class="ip">${miner.ip}</div></div>
+      <span class="badge offline">● Offline</span>
+    </div>
+    <div class="err-msg">${err || 'Unreachable'}</div>`;
+
+  const subtitle  = [d.hostname, d.version].filter(Boolean).join(' · ');
+  const isBitaxe  = miner.type === 'bitaxe';
+  const tempVal  = d.temp !== null ? `${d.temp}°C${d.vrTemp !== null ? ` / ${d.vrTemp}°C VR` : ''}` : 'N/A';
+  const fanVal   = d.fanRpm !== null
+    ? `${d.fanRpm.toLocaleString()} RPM${d.fanPercent !== null ? ` (${d.fanPercent}%)` : ''}`
+    : d.fanPercent !== null ? `${d.fanPercent}%`
+    : 'N/A';
+  const powerVal = d.power !== null ? `${d.power.toFixed(1)} W` : 'N/A';
+  const kwhDay   = d.power !== null ? `${(d.power * 24 / 1000).toFixed(2)} kWh/day` : null;
+
+  const ocPreset = isBitaxe ? detectOCPreset(d.frequency, d.coreVoltage) : null;
+
+  const ocPresetsHTML = isBitaxe ? OC_PRESETS.map(p =>
+    `<button class="oc-btn${ocPreset === p.name ? ' active' : ''}"
+             onclick="applyOC('${miner.ip}', '${p.name}')">${p.label}</button>`
+  ).join('') : '';
+
+  const fanCtrlVal = d.fanPercent !== null
+    ? `${d.fanPercent}%${d.fanRpm !== null ? ` · ${d.fanRpm.toLocaleString()} RPM` : ''}`
+    : 'N/A';
+
+  return `
+    <div class="card-header">
+      <div>
+        <div class="name">${miner.name}</div>
+        <div class="ip">${miner.ip}${subtitle ? ' · ' + subtitle : ''}</div>
+      </div>
+      <span class="badge online">● Online</span>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="m-label">Hashrate</div>
+        <div class="m-val" style="color:var(--blue)">${fmtHashrate(d.hashrate)}</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">${isBitaxe ? 'Temperature' : 'Chip Temp'}</div>
+        <div class="m-val ${tempClass(isBitaxe ? d.temp : (d.chipTemp ?? d.temp))}">${isBitaxe ? tempVal : (d.chipTemp !== null ? `${d.chipTemp}°C` : 'N/A')}</div>
+        ${!isBitaxe && d.temp !== null ? `<div class="m-sub">Exhaust: ${d.temp}°C</div>` : ''}
+      </div>
+      <div class="metric">
+        <div class="m-label">Fan</div>
+        <div class="m-val">${fanVal}</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Power</div>
+        <div class="m-val">${powerVal}</div>
+        ${d.efficiency ? `<div class="m-sub">${d.efficiency}</div>` : ''}
+        ${kwhDay       ? `<div class="m-sub">${kwhDay}</div>` : ''}
+        ${d.current !== null ? `<div class="m-sub">${d.current.toFixed(1)} A</div>` : ''}
+      </div>
+      <div class="metric">
+        <div class="m-label">Shares Acc / Rej</div>
+        <div class="m-val" style="font-size:.82rem">${fmtShares(d.sharesAccepted, d.sharesRejected)}</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Uptime</div>
+        <div class="m-val">${fmtUptime(d.uptime)}</div>
+      </div>
+      ${d.bestDiff ? `<div class="metric">
+        <div class="m-label">Best Diff</div>
+        <div class="m-val">${d.bestDiff}</div>
+      </div>` : ''}
+      ${d.frequency !== null ? `<div class="metric">
+        <div class="m-label">Frequency</div>
+        <div class="m-val">${d.frequency} MHz</div>
+      </div>` : ''}
+    </div>
+
+    ${isBitaxe ? `
+    <div class="controls">
+      <div class="ctrl-row">
+        <span class="ctrl-label">Fan</span>
+        <div class="fan-ctrl">
+          <button class="btn-step" onclick="adjustFan('${miner.ip}', -10)">−</button>
+          <span>${fanCtrlVal}</span>
+          <button class="btn-step" onclick="adjustFan('${miner.ip}', 10)">＋</button>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">OC Tune</span>
+        <div class="oc-wrap">
+          <div class="oc-presets">${ocPresetsHTML}</div>
+          <div class="oc-vals">
+            ${d.frequency !== null ? `<span>${d.frequency} MHz</span>` : ''}
+            ${d.coreVoltage !== null ? `<span>${d.coreVoltage} mV</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <button class="reboot-btn" onclick="rebootMiner('${miner.ip}', '${miner.name}')">⏻ Reboot</button>
+    </div>` : miner.type === 'avalon' ? `
+    <div class="controls">
+      <div class="ctrl-row">
+        <span class="ctrl-label">Fan</span>
+        <div class="fan-ctrl">
+          <button class="btn-step" onclick="adjustAvalonFan('${miner.ip}', -10)">−</button>
+          <span>${fanCtrlVal}</span>
+          <button class="btn-step" onclick="adjustAvalonFan('${miner.ip}', 10)">＋</button>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Work Mode</span>
+        <div class="oc-presets">
+          <button class="oc-btn${d.workMode === 0 ? ' active' : ''}" onclick="setAvalonWorkMode('${miner.ip}', 0)">Low</button>
+          <button class="oc-btn${d.workMode === 1 ? ' active' : ''}" onclick="setAvalonWorkMode('${miner.ip}', 1)">Med</button>
+          <button class="oc-btn${d.workMode === 2 ? ' active' : ''}" onclick="setAvalonWorkMode('${miner.ip}', 2)">High</button>
+        </div>
+      </div>
+      <button class="reboot-btn" onclick="avalonReboot('${miner.ip}', '${miner.name}')">⏻ Reboot</button>
+    </div>` : ''}
+
+    <div class="card-footer">
+      ${d.pool   ? `<span><strong>Pool:</strong> ${d.pool}</span>` : ''}
+      ${d.worker ? `<span><strong>Worker:</strong> ${d.worker}</span>` : ''}
+      <span style="color:var(--muted);font-size:.7rem">${d.model}</span>
+    </div>`;
+}
+
+function upsertCard(miner, status, d, err) {
+  state[miner.ip] = { status, data: d };
+  let el = document.getElementById(`card-${miner.ip}`);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = `card-${miner.ip}`;
+    document.getElementById('grid').appendChild(el);
+  }
+  el.className = `card ${status}`;
+  el.innerHTML  = cardHTML(miner, status, d, err);
+  updateSummary();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUMMARY
+// ─────────────────────────────────────────────────────────────────────────────
+function updateSummary() {
+  let online = 0, totalHr = 0, totalPow = 0, temps = [], acc = 0, rej = 0, hasPow = false;
+  for (const { status, data: d } of Object.values(state)) {
+    if (status !== 'online') continue;
+    online++;
+    if (d.hashrate  !== null) totalHr  += d.hashrate;
+    if (d.power     !== null) { totalPow += d.power; hasPow = true; }
+    const t = d.chipTemp ?? d.temp;
+    if (t !== null) temps.push(t);
+    if (d.sharesAccepted !== null) acc += d.sharesAccepted;
+    if (d.sharesRejected !== null) rej += d.sharesRejected;
+  }
+  document.getElementById('sumOnline').textContent   = `${online} / ${MINERS.length}`;
+  document.getElementById('sumHashrate').textContent = fmtHashrate(totalHr);
+  document.getElementById('sumPower').textContent    = hasPow ? `${totalPow.toFixed(1)} W` : 'N/A';
+  document.getElementById('sumTemp').textContent     = temps.length
+    ? `${(temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1)}°C` : 'N/A';
+  document.getElementById('sumShares').textContent   = `${acc.toLocaleString()} / ${rej}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NODE
+// ─────────────────────────────────────────────────────────────────────────────
+function fmtHashpower(hps) {
+  if (hps === null) return 'N/A';
+  const units = [['ZH/s', 1e21], ['EH/s', 1e18], ['PH/s', 1e15], ['TH/s', 1e12]];
+  for (const [u, v] of units) if (hps >= v) return `${(hps / v).toFixed(2)} ${u}`;
+  return `${(hps / 1e9).toFixed(2)} GH/s`;
+}
+
+function fmtDifficulty(d) {
+  if (d === null) return 'N/A';
+  if (d >= 1e12) return `${(d / 1e12).toFixed(2)} T`;
+  if (d >= 1e9)  return `${(d / 1e9).toFixed(2)} G`;
+  return d.toFixed(0);
+}
+
+function fmtDuration(seconds) {
+  if (seconds === null) return 'N/A';
+  const yr  = seconds / 31536000;
+  if (yr >= 1)   return `${yr.toFixed(1)} yr${yr >= 2 ? 's' : ''}`;
+  const day = seconds / 86400;
+  if (day >= 1)  return `${day.toFixed(1)} days`;
+  const hr  = seconds / 3600;
+  if (hr >= 1)   return `${hr.toFixed(1)} hrs`;
+  return `${(seconds / 60).toFixed(0)} min`;
+}
+
+async function fetchNode() {
+  try {
+    const r = await fetchTimeout('/node');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+
+    // Fleet hashrate in H/s from current summary state
+    let fleetHps = 0;
+    for (const { status, data } of Object.values(state)) {
+      if (status === 'online' && data?.hashrate) fleetHps += data.hashrate * 1e9;
+    }
+
+    const netHps  = d.networkhashps ?? null;
+    const oddsN   = (netHps && fleetHps) ? netHps / fleetHps : null;
+    const estSecs = oddsN ? oddsN * 600 : null;
+
+    // Poisson probability: P = 1 - e^(-fleetHps/netHps * blocks_in_period)
+    function soloProb(blocks) {
+      if (!netHps || !fleetHps) return '—';
+      const p = 1 - Math.exp(-(fleetHps / netHps) * blocks);
+      if (p < 0.0001)      return `${(p * 100).toFixed(4)}%`;
+      if (p < 0.01)        return `${(p * 100).toFixed(3)}%`;
+      return `${(p * 100).toFixed(2)}%`;
+    }
+
+    document.getElementById('nodeBlock').textContent   = d.blocks?.toLocaleString() ?? '—';
+    document.getElementById('nodeNetwork').textContent = fmtHashpower(netHps);
+    document.getElementById('nodeDiff').textContent    = fmtDifficulty(d.difficulty);
+    document.getElementById('nodeEst').textContent     = fmtDuration(estSecs);
+    document.getElementById('nodeSolo').textContent    = oddsN ? `1 in ${Math.round(oddsN).toLocaleString()}` : '—';
+    document.getElementById('nodeP1d').textContent     = soloProb(144);       // 144 blocks/day
+    document.getElementById('nodeP1w').textContent     = soloProb(1008);      // 1008 blocks/week
+    document.getElementById('nodeP1m').textContent     = soloProb(4320);      // ~30 days
+    document.getElementById('nodeP1y').textContent     = soloProb(52560);     // 365 days
+    document.getElementById('nodePanel').style.display = 'flex';
+  } catch (e) {
+    // Node unreachable — hide panel silently
+    document.getElementById('nodePanel').style.display = 'none';
+  }
+}
+
+async function fetchMempool() {
+  try {
+    const [fees, diff, mempool] = await Promise.all([
+      fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
+      fetch('https://mempool.space/api/v1/difficulty-adjustment').then(r => r.json()),
+      fetch('https://mempool.space/api/mempool').then(r => r.json()),
+    ]);
+
+    // Block value = subsidy + mempool fees
+    // Subsidy: 50 / 2^halvings, halving every 210,000 blocks
+    const blocks       = parseInt(document.getElementById('nodeBlock').textContent.replace(/,/g, '')) || 0;
+    const halvings     = Math.floor(blocks / 210000);
+    const subsidyBTC   = 50 / Math.pow(2, halvings);
+    const mempoolBTC   = mempool.total_fee / 1e8;
+    const blockValBTC  = subsidyBTC + mempoolBTC;
+
+    const diffPct  = diff.difficultyChange ?? 0;
+    const diffCls  = diffPct <= 0 ? 'diff-down' : 'diff-up';
+    const diffSign = diffPct > 0 ? '+' : '';
+
+    document.getElementById('mpBlockVal').textContent    = `${blockValBTC.toFixed(4)} BTC`;
+    document.getElementById('mpCount').textContent       = `${mempool.count.toLocaleString()} tx`;
+    document.getElementById('mpFees').textContent        = `${mempoolBTC.toFixed(4)} BTC`;
+    document.getElementById('mpRetarget').innerHTML      = `${diff.remainingBlocks?.toLocaleString()} blocks`;
+    document.getElementById('mpDiffChange').innerHTML    = `<span class="${diffCls}">${diffSign}${diffPct.toFixed(2)}%</span>`;
+    document.getElementById('mpRemaining').textContent   = fmtDuration(diff.remainingTime / 1000);
+    document.getElementById('mpFast').textContent        = `${fees.fastestFee} sat/vB`;
+    document.getElementById('mpMed').textContent         = `${fees.hourFee} sat/vB`;
+    document.getElementById('mpSlow').textContent        = `${fees.economyFee} sat/vB`;
+    document.getElementById('mempoolPanel').style.display = 'flex';
+  } catch (e) {
+    document.getElementById('mempoolPanel').style.display = 'none';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTROLS (Bitaxe only)
+// ─────────────────────────────────────────────────────────────────────────────
+function detectOCPreset(freq, voltage) {
+  return OC_PRESETS.find(p => p.frequency === freq && p.coreVoltage === voltage)?.name ?? null;
+}
+
+async function patchBitaxe(ip, data) {
+  const url = proxyUrl(ip, '/api/system');
+  const r = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  // Re-fetch after a moment so the card reflects the new setting
+  setTimeout(() => fetchMiner(MINERS.find(m => m.ip === ip)), 1200);
+}
+
+async function adjustFan(ip, delta) {
+  const current = state[ip]?.data?.fanPercent ?? 50;
+  const next = Math.max(0, Math.min(100, current + delta));
+  try {
+    await patchBitaxe(ip, { fanspeed: next });
+  } catch (e) {
+    alert(`Fan adjust failed: ${e.message}`);
+  }
+}
+
+async function applyOC(ip, presetName) {
+  const preset = OC_PRESETS.find(p => p.name === presetName);
+  if (!preset) return;
+  if (!confirm(`Apply ${preset.label} (${preset.frequency} MHz / ${preset.coreVoltage} mV) to ${ip}?`)) return;
+  try {
+    await patchBitaxe(ip, { frequency: preset.frequency, coreVoltage: preset.coreVoltage });
+  } catch (e) {
+    alert(`OC tune failed: ${e.message}`);
+  }
+}
+
+async function avalonSet(ip, parameter) {
+  const r = await fetch('/avalon-set', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ip, parameter }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  setTimeout(() => fetchMiner(MINERS.find(m => m.ip === ip)), 2000);
+}
+
+async function adjustAvalonFan(ip, delta) {
+  const current = state[ip]?.data?.fanPercent ?? 50;
+  const next = Math.max(0, Math.min(100, current + delta));
+  try {
+    await avalonSet(ip, `0,fan,${next}`);
+  } catch (e) {
+    alert(`Fan adjust failed: ${e.message}`);
+  }
+}
+
+async function setAvalonWorkMode(ip, mode) {
+  const label = mode === 1 ? 'High' : 'Normal';
+  if (!confirm(`Set Work Mode to ${label} on ${ip}?`)) return;
+  try {
+    await avalonSet(ip, `0,workmode,${mode}`);
+  } catch (e) {
+    alert(`Work mode change failed: ${e.message}`);
+  }
+}
+
+async function avalonReboot(ip, name) {
+  if (!confirm(`Reboot ${name} (${ip})?`)) return;
+  try {
+    await avalonSet(ip, '0,reboot,0');
+    const miner = MINERS.find(m => m.ip === ip);
+    upsertCard(miner, 'loading', null, null);
+    setTimeout(() => fetchMiner(miner), 10_000);
+  } catch (e) {
+    alert(`Reboot failed: ${e.message}`);
+  }
+}
+
+async function rebootMiner(ip, name) {
+  if (!confirm(`Reboot ${name} (${ip})?`)) return;
+  try {
+    const url = proxyUrl(ip, '/api/system/restart');
+    await fetch(url, { method: 'POST' });
+    const miner = MINERS.find(m => m.ip === ip);
+    upsertCard(miner, 'loading', null, null);
+    // Give the miner ~10 s to restart then re-poll
+    setTimeout(() => fetchMiner(miner), 10_000);
+  } catch (e) {
+    alert(`Reboot failed: ${e.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN
+// ─────────────────────────────────────────────────────────────────────────────
+async function fetchMiner(miner) {
+  upsertCard(miner, 'loading', null, null);
+  try {
+    let data;
+    if (miner.type === 'bitaxe') {
+      data = parseBitaxe(await fetchBitaxe(miner.ip));
+    } else {
+      data = parseAvalon(await fetchAvalon(miner.ip));
+    }
+    upsertCard(miner, 'online', data, null);
+  } catch (e) {
+    const msg = e.message || 'Unreachable';
+    if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('CORS')) {
+      corsErrorSeen = true;
+      document.getElementById('corsNotice').style.display = 'block';
+    }
+    upsertCard(miner, 'offline', null, msg);
+  }
+}
+
+async function doRefresh() {
+  document.getElementById('lastUpdated').textContent = 'Refreshing…';
+  await Promise.all(MINERS.map(fetchMiner));
+  if (hasNode) fetchNode();
+  fetchMempool();
+  document.getElementById('lastUpdated').textContent =
+    `Updated: ${new Date().toLocaleTimeString()}`;
+  document.getElementById('subtitle').textContent =
+    `${MINERS.length} miners · auto-refresh every ${REFRESH_MS / 1000}s`;
+  clearTimeout(timer);
+  timer = setTimeout(doRefresh, REFRESH_MS);
+}
+
+// Kick off
+async function init() {
+  if (!await loadConfig()) return;
+  doRefresh();
+}
+init();
+</script>
+</body>
+</html>
