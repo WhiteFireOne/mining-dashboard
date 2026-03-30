@@ -287,6 +287,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     print(f'Mining Dashboard  →  http://localhost:{PORT}/mining-dashboard.html')
     print('Press Ctrl+C to stop.\n')
-    # Bind to localhost only — change '127.0.0.1' to '' to allow LAN access
-    with http.server.HTTPServer(('127.0.0.1', PORT), Handler) as httpd:
+    # Bind to all interfaces for LAN access; ThreadingHTTPServer handles concurrent requests
+    with http.server.ThreadingHTTPServer(('', PORT), Handler) as httpd:
         httpd.serve_forever()
